@@ -1,6 +1,6 @@
 use itertools::Itertools;
 use akari::akari::Akari;
-use std::{io, io::BufRead};
+use std::{io, io::BufRead, time::Instant};
 use z3::SatResult;
 
 fn get_std_in() -> String {
@@ -37,13 +37,15 @@ fn main() {
         solver.assert(assert);
     }
 
+    let start = Instant::now();
+
     match solver.check() {
         SatResult::Sat => {
             println!("Sat\n");
             if let Some(model) = solver.get_model() {
                 // println!("{:?}", model);
                 game.set_solution(&context, model);
-                println!("solution\n{}", game);
+                println!("solution found in {:?}\n{}", start.elapsed(), game);
             }
         }
         SatResult::Unknown => {
