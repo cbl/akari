@@ -1,6 +1,6 @@
 # Akari
 
-A solver for [Akari](https://www.janko.at/Raetsel/Akari) Puzzles that uses the [z3](https://github.com/Z3Prover/z3) SMT prover.
+A solver for [Akari](https://www.janko.at/Raetsel/Akari) Puzzles that uses the [z3](https://github.com/Z3Prover/z3) SMT solver.
 
 ## Table Of Contents
 
