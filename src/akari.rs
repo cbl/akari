@@ -121,8 +121,6 @@ impl Akari {
             .collect::<Vec<(Pos, char)>>()
         {
             let n = val.to_string().parse::<u8>().unwrap();
-            
-            
 
             // The constraints for the neighbouring stripes with a light bulb on
             // the neighbouring field.
@@ -150,7 +148,6 @@ impl Akari {
             }
         }
 
-        
         // 3.
         // Add constraints to prevent bulbs from illuminating each other within
         // a row.
@@ -197,13 +194,13 @@ impl Akari {
                                     &b._eq(&int!(context, b_end + 1)).not(),
                                 ],
                             )
-                            .implies(&Bool::and(
-                                context, 
-                                &[
-                                    &a._eq(&int!(context, c)),
-                                    &b._eq(&int!(context, c)),
-                                ]
-                            ).not());
+                            .implies(
+                                &Bool::and(
+                                    context,
+                                    &[&a._eq(&int!(context, c)), &b._eq(&int!(context, c))],
+                                )
+                                .not(),
+                            );
 
                             if !asserts.contains(&constr) {
                                 asserts.insert(constr.clone());
@@ -224,7 +221,7 @@ impl Akari {
 
                         let constr = vars[var_index]
                             .clone()
-                            ._eq(&int!(context, end+1))
+                            ._eq(&int!(context, end + 1))
                             .implies(&or!(context, others));
 
                         asserts.insert(constr);

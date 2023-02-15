@@ -1,4 +1,3 @@
-use itertools::Itertools;
 use akari::akari::Akari;
 use std::{io, io::BufRead, time::Instant};
 use z3::SatResult;
