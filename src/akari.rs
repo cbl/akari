@@ -1,4 +1,4 @@
-use std::{fmt::Display, ops::Add, collections::HashSet};
+use std::{collections::HashSet, fmt::Display, ops::Add};
 
 use itertools::Itertools;
 
@@ -7,7 +7,6 @@ use z3::{
     Context, Model,
 };
 
-#[macro_export]
 macro_rules! or {
     ( $ctx:expr , $c:expr ) => {{
         Bool::or(
@@ -17,13 +16,18 @@ macro_rules! or {
     }};
 }
 
-#[macro_export]
 macro_rules! and {
     ( $ctx:expr , $c:expr ) => {{
         Bool::and(
             $ctx,
             &(0..$c.len()).map(|i| &$c[i]).collect::<Vec<_>>().as_slice(),
         )
+    }};
+}
+
+macro_rules! int {
+    ( $ctx:expr , $i:expr ) => {{
+        Int::from_u64($ctx, ($i) as u64)
     }};
 }
 
@@ -37,16 +41,16 @@ pub struct Akari {
 
 impl Akari {
     /// Get a list of stripes.
-    /// 
-    /// a strip describes a section in a row on which a bulb can lie. 
-    /// 
+    ///
+    /// a strip describes a section in a row on which a bulb can lie.
+    ///
     /// # Example
-    /// 
+    ///
     /// The following example has three stripes:
     /// - (row: 0, (start: 0, end: 1))
     /// - (row: 0, (start: 3, end: 4))
     /// - (row: 1, (start: 0, end: 4))
-    /// 
+    ///
     /// ```txt
     /// - - 2 - -
     /// - - - - -
@@ -80,9 +84,7 @@ impl Akari {
     fn get_vars<'a>(&self, context: &'a Context) -> Vec<Int<'a>> {
         self.get_stripes()
             .into_iter()
-            .map(|(r, (start, end))| {
-                Int::new_const(context, format!("r_{}_c_{}-{}", r, start, end))
-            })
+            .map(|(r, (start, end))| Int::new_const(context, format!("({},{}-{})", r, start, end)))
             .collect()
     }
 
@@ -97,12 +99,14 @@ impl Akari {
         // Limit bulbs to the be within the range of the stripe (start..end).
         // bulb = end+1 means there is no bulb on the stripe.
         for (var, (r, (start, end))) in vars.iter().zip(&stripes) {
-            asserts.insert(var.ge(&Int::from_u64(context, ((dim.1+1) * r + start) as u64)));
-            asserts.insert(var.le(&Int::from_u64(context, ((dim.1+1) * r + end + 1) as u64)));
+            asserts.insert(var.ge(&int!(context, *start)));
+            asserts.insert(var.le(&int!(context, end + 1)));
         }
 
+        let mut t = 0;
+
         // 2.
-        // Add the conditions that the cells have exactly as many adjacent bulbs 
+        // Add the conditions that the cells have exactly as many adjacent bulbs
         // as necessary.
         for ((r, c), val) in self
             .board
@@ -119,23 +123,23 @@ impl Akari {
             .collect::<Vec<(Pos, char)>>()
         {
             let n = val.to_string().parse::<u8>().unwrap();
+            
+            
 
-            // The constraints for the neighbouring stripes with a light bulb on 
+            // The constraints for the neighbouring stripes with a light bulb on
             // the neighbouring field.
             let neighbours = get_neighbour_stripes((r, c), &stripes)
                 .into_iter()
-                .map(|(index, pos)| {
-                    vars[index]._eq(&Int::from_u64(context, ((dim.1+1) * pos.0 + pos.1) as u64))
-                })
+                .map(|(index, pos)| vars[index]._eq(&int!(context, pos.1)))
                 .collect::<Vec<Bool>>();
 
             if n == 0 {
-                // n = 0 means no neighbouring stripe can have a bulb on the 
+                // n = 0 means no neighbouring stripe can have a bulb on the
                 // neighbouring field.
                 asserts.insert(or!(context, neighbours).not());
             } else {
                 assert!(n <= 4, "Square can only have 0-4 neighbours.");
-                for group in unique_permutations(neighbours.clone(), 2) {
+                for group in unique_permutations(neighbours.clone(), n) {
                     let others = neighbours
                         .iter()
                         .filter(|c| !group.contains(c))
@@ -143,62 +147,95 @@ impl Akari {
                         .collect::<Vec<Bool>>();
 
                     // All of a group <-> No
-                    // asserts.insert(and!(context, group).iff(&or!(context, others).not()));
+                    asserts.insert(and!(context, group).iff(&or!(context, others).not()));
                 }
             }
         }
 
-        // 3. 
-        // Add constraints to prevent bulbs from illuminating each other within 
+        
+        // 3.
+        // Add constraints to prevent bulbs from illuminating each other within
         // a row.
-        for c in 0..2 {
+        for c in 0..dim.1 {
             let mut start_row = 0;
-            
-            'row: for r in 0..dim.0 {
-                if self.board[r][c] == '-' && r != dim.0-1 {
+
+            for r in 0..dim.0 {
+                if self.board[r][c] == '-' && r != dim.0 - 1 {
                     continue;
                 }
 
-                if r != start_row || r == dim.0-1 {
-                    let end_row = match r == dim.0-1 {
+                if r != start_row || r == dim.0 - 1 {
+                    let end_row = match r == dim.0 - 1 {
                         true => r,
-                        false => r-1
+                        false => r - 1,
                     };
 
                     let stripes_in_r_and_c = stripes
                         .iter()
                         .enumerate()
-                        .filter(|(_, (sr, (start, end)))| *start <= c && *end >= c && start_row <= *sr && end_row >= *sr)
+                        .filter(|(_, (sr, (start, end)))| {
+                            *start <= c && *end >= c && start_row <= *sr && end_row >= *sr
+                        })
                         .map(|(i, stripe)| (i, *stripe))
                         .collect::<Vec<(usize, Stripe)>>();
 
-                    if stripes_in_r_and_c.len() <= 1 {
-                        continue 'row;
+                    if stripes_in_r_and_c.len() == 1 {
+                        let (i, (_, (_, end))) = stripes_in_r_and_c[0];
+                        asserts.insert(vars[i].clone()._eq(&int!(context, end + 1)).not());
                     }
-
-                    // println!("{:?}: {:?}", ((start_row, end_row), c), stripes_in_r_and_c.len());
 
                     for i in 0..stripes_in_r_and_c.len() {
-                        for j in (i+1)..stripes_in_r_and_c.len() {
-                            let (a_index, (a_row, _)) = stripes_in_r_and_c[i];
-                            let (b_index, (b_row, _)) = stripes_in_r_and_c[j];
-                            
-                            let a_mod = vars[a_index].modulo(&Int::from_u64(context, (dim.1+1) as u64));
-                            let b_mod = vars[b_index].modulo(&Int::from_u64(context, (dim.1+1) as u64));
+                        for j in (i + 1)..stripes_in_r_and_c.len() {
+                            let (a_index, (a_row, (_, a_end))) = stripes_in_r_and_c[i];
+                            let (b_index, (b_row, (_, b_end))) = stripes_in_r_and_c[j];
 
-                            let constr = a_mod._eq(&b_mod).not();
+                            let a = vars[a_index].clone();
+                            let b = vars[b_index].clone();
+
+                            let constr = Bool::and(
+                                context,
+                                &[
+                                    &a._eq(&int!(context, a_end + 1)).not(),
+                                    &b._eq(&int!(context, b_end + 1)).not(),
+                                ],
+                            )
+                            .implies(&Bool::and(
+                                context, 
+                                &[
+                                    &a._eq(&int!(context, c)),
+                                    &b._eq(&int!(context, c)),
+                                ]
+                            ).not());
 
                             if !asserts.contains(&constr) {
-                                asserts.insert(a_mod._eq(&b_mod).not());
-
-                                println!("(a_row: {}, b_row: {}){:?}", a_row, b_row, a_mod._eq(&b_mod).not())
+                                asserts.insert(constr.clone());
+                                
+                                t+=1;
                             }
                         }
+
+                        let others = stripes_in_r_and_c
+                            .iter()
+                            .enumerate()
+                            .filter(|(k, _)| *k != i)
+                            .map(|(_, el)| el)
+                            .map(|(var_i, (_, (_, end)))| {
+                                vars[*var_i].clone()._eq(&int!(context, c))
+                            })
+                            .collect::<Vec<_>>();
+
+                        let (var_index, (_, (_, end))) = stripes_in_r_and_c[i];
+
+                        let constr = vars[var_index]
+                            .clone()
+                            ._eq(&int!(context, end+1))
+                            .implies(&or!(context, others));
+
+                        asserts.insert(constr);
                     }
-                    // dbg!(stripes_in_r_and_c);
                 }
 
-                start_row = r+1;
+                start_row = r + 1;
             }
         }
 
@@ -211,9 +248,7 @@ impl Akari {
         let vars: Vec<Int> = self.get_vars(context);
 
         for (var, (r, (_, end))) in vars.iter().zip(stripes) {
-            let c = model.eval(var, false).unwrap().as_u64().unwrap() as usize % (dim.1+1);
-
-            println!("r: {}, c: {}", r, c);
+            let c = model.eval(var, false).unwrap().as_u64().unwrap() as usize;
 
             if c <= end {
                 self.board[r][c] = 'o';
@@ -262,10 +297,10 @@ impl Display for Akari {
     }
 }
 
-fn unique_permutations<'ctx>(constraints: Vec<Bool<'ctx>>, n: usize) -> Vec<Vec<Bool<'ctx>>> {
+fn unique_permutations<'ctx>(constraints: Vec<Bool<'ctx>>, n: u8) -> Vec<Vec<Bool<'ctx>>> {
     constraints
         .into_iter()
-        .permutations(n)
+        .permutations(n as usize)
         .map(|mut constraints| {
             constraints.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
             constraints

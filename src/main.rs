@@ -1,16 +1,7 @@
-use clap::Parser;
 use itertools::Itertools;
-use numberlink::akari::Akari;
-use z3::SatResult;
+use akari::akari::Akari;
 use std::{io, io::BufRead};
-
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct Args {
-    /// Whether to pretty print the output.
-    #[clap(short, long)]
-    pretty: bool,
-}
+use z3::SatResult;
 
 fn get_std_in() -> String {
     let stdin = io::stdin();
@@ -25,16 +16,13 @@ fn get_std_in() -> String {
 }
 
 fn main() {
-    // Parse cli arguments.
-    let args = Args::parse();
-
     // Get stdin.
     let board = get_std_in();
 
     // Construct game from stdin.
     let mut game = Akari::from(board);
 
-    println!("{}", game);
+    println!("problem\n{}", game);
 
     // Construct context.
     let context = z3::Context::new(&z3::Config::default());
@@ -51,11 +39,11 @@ fn main() {
 
     match solver.check() {
         SatResult::Sat => {
-            println!("Sat");
+            println!("Sat\n");
             if let Some(model) = solver.get_model() {
-                println!("{:?}", model);
+                // println!("{:?}", model);
                 game.set_solution(&context, model);
-                println!("{}", game);
+                println!("solution\n{}", game);
             }
         }
         SatResult::Unknown => {
