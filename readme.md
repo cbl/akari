@@ -2,10 +2,6 @@
 
 A solver for [Akari](https://www.janko.at/Raetsel/Akari) Puzzles that uses the [z3](https://github.com/Z3Prover/z3) SMT prover.
 
-```
-curl -v --silent https://www.janko.at/Raetsel/Akari/523.a.htm 2>&1 | sed -n -e '/problem/,/solution/ p' | sed -e '1d;$d' | ./target/release/akari
-```
-
 ## Table Of Contents
 
 -   [Introduction](#introduction)
