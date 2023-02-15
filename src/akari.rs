@@ -32,7 +32,7 @@ macro_rules! int {
 }
 
 pub type Pos = (usize, usize);
-pub type Stripe = (usize, (usize, usize));
+pub type Strip = (usize, (usize, usize));
 
 #[derive(Debug)]
 pub struct Akari {
@@ -40,13 +40,13 @@ pub struct Akari {
 }
 
 impl Akari {
-    /// Get a list of stripes.
+    /// Get a list of strips.
     ///
     /// a strip describes a section in a row on which a bulb can lie.
     ///
     /// # Example
     ///
-    /// The following example has three stripes:
+    /// The following example has three strips:
     /// - (row: 0, (start: 0, end: 1))
     /// - (row: 0, (start: 3, end: 4))
     /// - (row: 1, (start: 0, end: 4))
@@ -55,7 +55,7 @@ impl Akari {
     /// - - 2 - -
     /// - - - - -
     /// ```
-    fn get_stripes(&self) -> Vec<Stripe> {
+    fn get_stripes(&self) -> Vec<Strip> {
         let mut stripes = vec![];
 
         for (r, row) in self.board.iter().enumerate() {
@@ -92,18 +92,16 @@ impl Akari {
         let mut asserts: HashSet<Bool> = Default::default();
         let dim = self.get_dim();
 
-        let stripes = self.get_stripes();
+        let strips = self.get_stripes();
         let vars: Vec<Int> = self.get_vars(context);
 
         // 1.
         // Limit bulbs to the be within the range of the stripe (start..end).
         // bulb = end+1 means there is no bulb on the stripe.
-        for (var, (r, (start, end))) in vars.iter().zip(&stripes) {
+        for (var, (r, (start, end))) in vars.iter().zip(&strips) {
             asserts.insert(var.ge(&int!(context, *start)));
             asserts.insert(var.le(&int!(context, end + 1)));
         }
-
-        let mut t = 0;
 
         // 2.
         // Add the conditions that the cells have exactly as many adjacent bulbs
@@ -128,7 +126,7 @@ impl Akari {
 
             // The constraints for the neighbouring stripes with a light bulb on
             // the neighbouring field.
-            let neighbours = get_neighbour_stripes((r, c), &stripes)
+            let neighbours = get_neighbour_strips((r, c), &strips)
                 .into_iter()
                 .map(|(index, pos)| vars[index]._eq(&int!(context, pos.1)))
                 .collect::<Vec<Bool>>();
@@ -170,24 +168,24 @@ impl Akari {
                         false => r - 1,
                     };
 
-                    let stripes_in_r_and_c = stripes
+                    let strips_in_r_and_c = strips
                         .iter()
                         .enumerate()
                         .filter(|(_, (sr, (start, end)))| {
                             *start <= c && *end >= c && start_row <= *sr && end_row >= *sr
                         })
-                        .map(|(i, stripe)| (i, *stripe))
-                        .collect::<Vec<(usize, Stripe)>>();
+                        .map(|(i, strip)| (i, *strip))
+                        .collect::<Vec<(usize, Strip)>>();
 
-                    if stripes_in_r_and_c.len() == 1 {
-                        let (i, (_, (_, end))) = stripes_in_r_and_c[0];
+                    if strips_in_r_and_c.len() == 1 {
+                        let (i, (_, (_, end))) = strips_in_r_and_c[0];
                         asserts.insert(vars[i].clone()._eq(&int!(context, end + 1)).not());
                     }
 
-                    for i in 0..stripes_in_r_and_c.len() {
-                        for j in (i + 1)..stripes_in_r_and_c.len() {
-                            let (a_index, (a_row, (_, a_end))) = stripes_in_r_and_c[i];
-                            let (b_index, (b_row, (_, b_end))) = stripes_in_r_and_c[j];
+                    for i in 0..strips_in_r_and_c.len() {
+                        for j in (i + 1)..strips_in_r_and_c.len() {
+                            let (a_index, (_, (_, a_end))) = strips_in_r_and_c[i];
+                            let (b_index, (_, (_, b_end))) = strips_in_r_and_c[j];
 
                             let a = vars[a_index].clone();
                             let b = vars[b_index].clone();
@@ -209,12 +207,10 @@ impl Akari {
 
                             if !asserts.contains(&constr) {
                                 asserts.insert(constr.clone());
-                                
-                                t+=1;
                             }
                         }
 
-                        let others = stripes_in_r_and_c
+                        let others = strips_in_r_and_c
                             .iter()
                             .enumerate()
                             .filter(|(k, _)| *k != i)
@@ -224,7 +220,7 @@ impl Akari {
                             })
                             .collect::<Vec<_>>();
 
-                        let (var_index, (_, (_, end))) = stripes_in_r_and_c[i];
+                        let (var_index, (_, (_, end))) = strips_in_r_and_c[i];
 
                         let constr = vars[var_index]
                             .clone()
@@ -244,10 +240,10 @@ impl Akari {
 
     pub fn set_solution<'a>(&mut self, context: &'a Context, model: Model) {
         let dim = self.get_dim();
-        let stripes = self.get_stripes();
+        let strips = self.get_stripes();
         let vars: Vec<Int> = self.get_vars(context);
 
-        for (var, (r, (_, end))) in vars.iter().zip(stripes) {
+        for (var, (r, (_, end))) in vars.iter().zip(strips) {
             let c = model.eval(var, false).unwrap().as_u64().unwrap() as usize;
 
             if c <= end {
@@ -309,8 +305,8 @@ fn unique_permutations<'ctx>(constraints: Vec<Bool<'ctx>>, n: u8) -> Vec<Vec<Boo
         .collect::<Vec<_>>()
 }
 
-fn get_neighbour_stripes((r, c): (usize, usize), stripes: &Vec<Stripe>) -> Vec<(usize, Pos)> {
-    stripes
+fn get_neighbour_strips((r, c): (usize, usize), strips: &Vec<Strip>) -> Vec<(usize, Pos)> {
+    strips
         .iter()
         .enumerate()
         .filter_map(|(i, (sr, (start, end)))| {
