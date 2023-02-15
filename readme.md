@@ -50,6 +50,8 @@ curl -v --silent https://www.janko.at/Raetsel/Akari/523.a.htm 2>&1 | sed -n -e '
 
 ## Documentation
 
+In the following the construction of the formulas are described, these are implemented in [src/ankari.rs:91-238](https://github.com/cbl/akari/blob/9791015a71fb643c7111b9e6e39de102c63ffe8b/src/akari.rs#L91-L238).
+
 The list `S` of variables is given by one or more stripes in each row, marking a range within the line that may contain **one** lamp. The domain of each strip `s ∈ S` is given by `s >= s_start && s <= s_end` where `s == s_end` means that no lamp is placed on the strip.
 
 ![Akari Strips](strips.png)
